@@ -1,0 +1,25 @@
+[package]
+name = "ingest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+shared-types = { path = "../../shared/types" }
+reconstructor = { path = "../reconstructor" }
+signal = { path = "../signal" }
+executor = { path = "../executor" }
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+tungstenite = "0.24"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ringbuf = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+dotenvy = "0.15"
+futures-util = "0.3"
+rand = "0.8"
+time = { version = "0.3", features = ["formatting", "parsing"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

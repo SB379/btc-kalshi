@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "shared/types",
+    "services/ingest",
+    "services/reconstructor",
+    "services/signal",
+    "services/executor",
+]
+resolver = "2"
