@@ -1,5 +1,5 @@
-use std::collections::VecDeque;
 use shared_types::{BrtiEstimate, Direction};
+use std::collections::VecDeque;
 
 pub struct BrtiDeltaDetector {
     buffer: VecDeque<BrtiEstimate>,
@@ -48,7 +48,13 @@ impl BrtiDeltaDetector {
         }
         let delta = newest.value - oldest.value;
         let time_secs = elapsed_ms as f64 / 1000.0;
-        Some(delta / time_secs)
+        let velocity = delta / time_secs;
+        debug_assert!(
+            velocity.abs() < 10_000.0,
+            "velocity out of range: {}",
+            velocity
+        );
+        Some(velocity)
     }
 
     /// Classify the current momentum relative to threshold_pct.
@@ -73,7 +79,12 @@ mod tests {
     use shared_types::BrtiEstimate;
 
     fn est(value: f64, ts_ms: u64) -> BrtiEstimate {
-        BrtiEstimate { value, timestamp: ts_ms, exchange_count: 2, confidence: 1.0 }
+        BrtiEstimate {
+            value,
+            timestamp: ts_ms,
+            exchange_count: 2,
+            confidence: 1.0,
+        }
     }
 
     #[test]
@@ -100,7 +111,10 @@ mod tests {
         for i in 0..5u64 {
             d.push(est(60_000.0, 1000 * i));
         }
-        assert!(matches!(d.direction(0.01), shared_types::Direction::Neutral));
+        assert!(matches!(
+            d.direction(0.01),
+            shared_types::Direction::Neutral
+        ));
     }
 
     #[test]

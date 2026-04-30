@@ -20,6 +20,8 @@ dotenvy = "0.15"
 futures-util = "0.3"
 rand = "0.8"
 time = { version = "0.3", features = ["formatting", "parsing"] }
+reqwest = { version = "0.12", features = ["json", "native-tls"] }
+historian = { path = "../../data/historian" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

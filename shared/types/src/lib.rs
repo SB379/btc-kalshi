@@ -69,8 +69,12 @@ pub struct KalshiMarket {
     pub no_price: f64,
     /// BTC price the market resolves around
     pub strike: f64,
+    /// unix ms when market opened
+    pub open_time: u64,
     /// unix ms
     pub closes_at: u64,
+    /// true when yes_price/no_price were computed synthetically (no live orderbook bid)
+    pub synthetic: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

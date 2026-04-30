@@ -1,4 +1,5 @@
 use crate::normalize::local_ts_ms;
+use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use shared_types::{Exchange, Trade};
 use std::time::Duration;
@@ -6,8 +7,7 @@ use tokio::sync::mpsc;
 use tokio::time::timeout;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
-use tracing::{info, warn, error};
-use futures_util::{SinkExt, StreamExt};
+use tracing::{error, info, warn};
 
 const WS_URL: &str = "wss://advanced-trade-ws.coinbase.com";
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -76,7 +76,10 @@ pub async fn run(tx: mpsc::Sender<Trade>) {
     let mut backoff_ms = 100u64;
     loop {
         match connect_and_consume(&tx).await {
-            Ok(()) => warn!(exchange = "coinbase", "WebSocket closed cleanly, reconnecting"),
+            Ok(()) => warn!(
+                exchange = "coinbase",
+                "WebSocket closed cleanly, reconnecting"
+            ),
             Err(e) => error!(exchange = "coinbase", error = %e, "WebSocket error, reconnecting"),
         }
         let jitter = jitter(backoff_ms);
@@ -111,7 +114,10 @@ async fn connect_and_consume(tx: &mpsc::Sender<Trade>) -> Result<(), Box<dyn std
                         Ok(trades) => {
                             for trade in trades {
                                 if tx.try_send(trade).is_err() {
-                                    warn!(exchange = "coinbase", "merge channel full, dropping trade");
+                                    warn!(
+                                        exchange = "coinbase",
+                                        "merge channel full, dropping trade"
+                                    );
                                 }
                             }
                         }

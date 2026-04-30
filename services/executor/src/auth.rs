@@ -2,8 +2,8 @@ use anyhow::Context;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use rsa::{
-    pkcs1v15::SigningKey,
-    signature::{SignatureEncoding, Signer},
+    pss::BlindedSigningKey,
+    signature::{RandomizedSigner, SignatureEncoding},
     RsaPrivateKey,
 };
 use sha2::Sha256;
@@ -23,13 +23,16 @@ impl KalshiAuth {
         let pem =
             std::env::var("KALSHI_PRIVATE_KEY").context("KALSHI_PRIVATE_KEY env var not set")?;
         let private_key = parse_private_key(&pem)?;
-        Ok(KalshiAuth { key_id, private_key })
+        Ok(KalshiAuth {
+            key_id,
+            private_key,
+        })
     }
 
     /// Build the three Kalshi authentication headers for a request.
     ///
     /// message = timestamp_ms_string + METHOD_UPPERCASE + path
-    /// signature = base64(PKCS1v15-SHA256-sign(message))
+    /// signature = base64(RSA-PSS-SHA256-sign(message)), salt_len = digest_len (32 bytes)
     pub fn sign_request(&self, method: &str, path: &str) -> Result<HeaderMap, anyhow::Error> {
         let ts_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -38,8 +41,9 @@ impl KalshiAuth {
         let timestamp = ts_ms.to_string();
 
         let message = format!("{}{}{}", timestamp, method.to_uppercase(), path);
-        let signing_key = SigningKey::<Sha256>::new(self.private_key.clone());
-        let sig = signing_key.sign(message.as_bytes());
+        // RSA-PSS with SHA-256, salt_length = digest_length (matches Kalshi's requirement)
+        let signing_key = BlindedSigningKey::<Sha256>::new(self.private_key.clone());
+        let sig = signing_key.sign_with_rng(&mut rand::rngs::OsRng, message.as_bytes());
         let sig_b64 = BASE64.encode(sig.to_bytes().as_ref());
 
         let mut headers = HeaderMap::new();
@@ -83,13 +87,19 @@ mod tests {
         let private_key =
             RsaPrivateKey::new(&mut OsRng, 2048).expect("failed to generate test RSA key");
 
-        let auth = KalshiAuth { key_id: "test-key-id".to_string(), private_key };
+        let auth = KalshiAuth {
+            key_id: "test-key-id".to_string(),
+            private_key,
+        };
 
         let headers = auth
             .sign_request("POST", "/portfolio/orders")
             .expect("sign_request should not fail");
 
-        assert!(headers.contains_key("kalshi-access-key"), "missing access-key header");
+        assert!(
+            headers.contains_key("kalshi-access-key"),
+            "missing access-key header"
+        );
         assert!(
             headers.contains_key("kalshi-access-timestamp"),
             "missing timestamp header"
@@ -105,7 +115,9 @@ mod tests {
             .expect("signature header present")
             .to_str()
             .expect("signature is valid UTF-8");
-        let decoded = BASE64.decode(sig_str).expect("signature should be valid base64");
+        let decoded = BASE64
+            .decode(sig_str)
+            .expect("signature should be valid base64");
         assert!(!decoded.is_empty(), "decoded signature should not be empty");
 
         // Key header should match what we set
@@ -121,8 +133,13 @@ mod tests {
     fn sign_request_timestamp_is_numeric() {
         let private_key =
             RsaPrivateKey::new(&mut OsRng, 2048).expect("failed to generate test RSA key");
-        let auth = KalshiAuth { key_id: "k".to_string(), private_key };
-        let headers = auth.sign_request("GET", "/portfolio/balance").expect("sign ok");
+        let auth = KalshiAuth {
+            key_id: "k".to_string(),
+            private_key,
+        };
+        let headers = auth
+            .sign_request("GET", "/portfolio/balance")
+            .expect("sign ok");
         let ts_str = headers
             .get("kalshi-access-timestamp")
             .expect("ts header present")

@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use shared_types::{BrtiEstimate, Exchange, ReconstructorConfig, Trade};
+use std::collections::HashMap;
 
 use crate::window::TradeWindow;
 
@@ -12,14 +12,12 @@ impl ReconstructorEngine {
     /// Create engine with one TradeWindow pre-allocated per Exchange variant.
     pub fn new(config: ReconstructorConfig) -> Self {
         let mut windows = HashMap::new();
+        // 5 accessible CF Benchmark constituent feeds (itBit/LMAX/Bullish unavailable)
         for exchange in [
             Exchange::Coinbase,
             Exchange::Kraken,
             Exchange::Bitstamp,
             Exchange::Gemini,
-            Exchange::ItBit,
-            Exchange::Lmax,
-            Exchange::Bullish,
             Exchange::CryptoCom,
         ] {
             windows.insert(exchange, TradeWindow::new());
@@ -40,7 +38,7 @@ impl ReconstructorEngine {
     ///
     /// Returns None if fewer than `config.min_exchanges` windows have live data.
     /// value = arithmetic mean of per-exchange VWMPs
-    /// confidence = live_exchange_count / 8.0
+    /// confidence = live_exchange_count / 5.0 (5 accessible CF constituent feeds)
     fn publish(&self, now_ms: u64) -> Option<BrtiEstimate> {
         let live: Vec<f64> = self
             .windows
@@ -55,7 +53,7 @@ impl ReconstructorEngine {
         }
 
         let value = (live.iter().sum::<f64>() / live.len() as f64 * 100.0).round() / 100.0;
-        let confidence = live_count as f64 / 8.0;
+        let confidence = live_count as f64 / 5.0;
 
         Some(BrtiEstimate {
             value,
@@ -119,7 +117,7 @@ mod tests {
             expected
         );
         assert_eq!(est.exchange_count, 2);
-        assert!((est.confidence - 0.25).abs() < f64::EPSILON);
+        assert!((est.confidence - 0.40).abs() < f64::EPSILON);
     }
 
     #[test]

@@ -1,5 +1,5 @@
-use std::collections::VecDeque;
 use shared_types::Trade;
+use std::collections::VecDeque;
 
 pub struct TradeWindow {
     trades: VecDeque<Trade>,
@@ -7,7 +7,9 @@ pub struct TradeWindow {
 
 impl TradeWindow {
     pub fn new() -> Self {
-        TradeWindow { trades: VecDeque::new() }
+        TradeWindow {
+            trades: VecDeque::new(),
+        }
     }
 
     /// Append a trade and evict entries outside the rolling window.

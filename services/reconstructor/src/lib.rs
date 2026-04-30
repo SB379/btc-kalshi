@@ -5,9 +5,11 @@ pub mod validator;
 pub mod window;
 
 use engine::ReconstructorEngine;
+use historian::{BrtiRecord, Historian};
 use ringbuf::traits::{Consumer, Producer};
 use ringbuf::{HeapCons, HeapProd};
 use shared_types::{BrtiEstimate, ReconstructorConfig, Trade};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
@@ -17,7 +19,11 @@ const LOG_INTERVAL: Duration = Duration::from_millis(100);
 /// and publish BrtiEstimate values into the provided signal ring buffer producer.
 ///
 /// Blocks forever; call from a dedicated tokio task.
-pub async fn run(mut consumer: HeapCons<Trade>, mut signal_producer: HeapProd<BrtiEstimate>) {
+pub async fn run(
+    mut consumer: HeapCons<Trade>,
+    mut signal_producer: HeapProd<BrtiEstimate>,
+    historian: Arc<Historian>,
+) {
     let config = ReconstructorConfig {
         window_secs: 60,
         min_exchanges: 2,
@@ -41,12 +47,19 @@ pub async fn run(mut consumer: HeapCons<Trade>, mut signal_producer: HeapProd<Br
                         exchanges = estimate.exchange_count,
                         "brti estimate"
                     );
-                    if estimate.confidence < 0.5 {
-                        warn!("low confidence - fewer than 4 exchanges live");
+                    if estimate.confidence < 0.6 {
+                        warn!("low confidence - fewer than 3 of 5 exchanges live");
                     }
                     last_logged = Instant::now();
                     last_exchange_count = estimate.exchange_count;
                 }
+
+                historian.record_brti(BrtiRecord {
+                    timestamp_ms: estimate.timestamp,
+                    value: estimate.value,
+                    confidence: estimate.confidence,
+                    exchange_count: estimate.exchange_count,
+                });
 
                 if signal_producer.try_push(estimate).is_err() {
                     warn!("signal ring buffer full, dropping estimate");

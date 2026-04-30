@@ -8,3 +8,5 @@ shared-types = { path = "../../shared/types" }
 tokio = { version = "1", features = ["full"] }
 ringbuf = "0.4"
 tracing = "0.1"
+
+historian = { path = "../../data/historian" }

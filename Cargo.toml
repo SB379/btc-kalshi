@@ -5,5 +5,6 @@ members = [
     "services/reconstructor",
     "services/signal",
     "services/executor",
+    "data/historian",
 ]
 resolver = "2"

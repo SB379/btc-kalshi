@@ -16,6 +16,7 @@ rsa = { version = "0.9", features = ["sha2"] }
 sha2 = "0.10"
 base64 = "0.22"
 rand = "0.8"
+historian = { path = "../../data/historian" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

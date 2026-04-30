@@ -19,14 +19,14 @@ impl RiskConfig {
             max_position_cents: std::env::var("MAX_POSITION_SIZE_CENTS")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(500),
+                .unwrap_or(2000),
             max_daily_loss_cents: std::env::var("MAX_DAILY_LOSS_CENTS")
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(5000),
             min_signal_confidence: 0.45,
-            min_edge: 0.08,
-            max_open_positions: 5,
+            min_edge: 0.05,
+            max_open_positions: 8,
         }
     }
 }
@@ -93,6 +93,11 @@ impl RiskGate {
         self.open_positions = self.open_positions.saturating_add(1);
     }
 
+    /// Record that a position has closed (settled or exited early).
+    pub fn record_close(&mut self) {
+        self.open_positions = self.open_positions.saturating_sub(1);
+    }
+
     /// Record a P&L update (positive = profit, negative = loss).
     pub fn record_pnl(&mut self, pnl_cents: i64) {
         self.daily_loss_cents = self.daily_loss_cents.saturating_add(pnl_cents);
@@ -132,7 +137,9 @@ mod tests {
                 yes_price: 45.0,
                 no_price: 55.0,
                 strike: 70_000.0,
+                open_time: 0,
                 closes_at: 9_999_999_999_999,
+                synthetic: false,
             },
             signal: Signal {
                 direction: Direction::Up,
@@ -153,11 +160,11 @@ mod tests {
 
     fn default_config() -> RiskConfig {
         RiskConfig {
-            max_position_cents: 500,
+            max_position_cents: 2000,
             max_daily_loss_cents: 5000,
             min_signal_confidence: 0.45,
-            min_edge: 0.08,
-            max_open_positions: 5,
+            min_edge: 0.05,
+            max_open_positions: 8,
         }
     }
 
@@ -180,12 +187,14 @@ mod tests {
     #[test]
     fn too_many_positions_trips_gate() {
         let mut gate = RiskGate::new(default_config());
-        // Fill 5 positions (the maximum)
-        for _ in 0..5 {
+        // Fill 8 positions (the maximum)
+        for _ in 0..8 {
             gate.record_fill(100);
         }
         let opp = make_opp(0.70, 0.15);
-        let err = gate.check(&opp).expect_err("should trip position count gate");
+        let err = gate
+            .check(&opp)
+            .expect_err("should trip position count gate");
         assert!(matches!(err, RiskViolation::TooManyOpenPositions { .. }));
     }
 
@@ -216,6 +225,9 @@ mod tests {
         gate.maybe_reset_daily(tomorrow);
 
         let opp = make_opp(0.70, 0.15);
-        assert!(gate.check(&opp).is_ok(), "loss should be reset after midnight");
+        assert!(
+            gate.check(&opp).is_ok(),
+            "loss should be reset after midnight"
+        );
     }
 }

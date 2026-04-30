@@ -6,7 +6,7 @@ Low-latency Bitcoin prediction market trading system. We arbitrage Kalshi's BTC 
 by reconstructing the CF Benchmarks BRTI index in real-time from constituent exchange feeds,
 faster than Kalshi's orderbook reprices.
 
-**Do not deviate from the architecture defined here. Do not build ahead of the current phase.**
+**Project sunset April 2026.** This file was the build guide used during active development. See [README.md](README.md) for architecture overview and post-mortem.
 
 ---
 
@@ -45,12 +45,10 @@ btc-kalshi/
 | 2     | `services/reconstructor` | ✅ Complete           |
 | 3     | `services/signal`        | ✅ Complete           |
 | 4     | `services/executor`      | ✅ Complete           |
-| 5     | `services/ml-sidecar`    | ⏳ Blocked on Phase 3 |
-| 6     | `data/historian`         | ⏳ Blocked on Phase 1 |
-| 7     | `data/backtest`          | ⏳ Blocked on Phase 6 |
-| 8     | `dashboard`              | ⏳ Blocked on Phase 4 |
-
-**Do not write code for a blocked phase.** When asked to start a new phase, re-read this file first.
+| 5     | `services/ml-sidecar`    | Never built (project sunset) |
+| 6     | `data/historian`         | ✅ Complete           |
+| 7     | `data/backtest`          | ✅ Complete           |
+| 8     | `dashboard`              | Never built (project sunset) |
 
 ---
 
@@ -145,7 +143,7 @@ pub enum Direction { Up, Down, Neutral }
 | HTTP client        | `reqwest` (TLS enabled)                                          |
 | HMAC auth (Kalshi) | `hmac` + `sha2`                                                  |
 | Logging            | `tracing` + `tracing-subscriber` (JSON format in prod)           |
-| Parquet writes     | `parquet` crate (Apache arrow ecosystem)                         |
+| JSONL writes       | `serde_json` — append-only, one JSON line per record             |
 | Config/env         | `dotenvy` + `config` crate                                       |
 | Time               | `std::time::SystemTime` for local_ts; parse exchange ts manually |
 
@@ -266,3 +264,27 @@ Your signal must know which benchmark resolves which market. Don't conflate them
 - Skip the `local_ts` timestamp — it's critical for latency measurement
 - Use `async_std` — this repo uses `tokio` exclusively
 - Create a new `.env` file — modify `.env.example` only
+
+---
+
+## Historian Log Format
+
+Files: `data/logs/{type}_{YYYY-MM-DD}.jsonl` — one JSON object per line.
+
+Read in Python:
+```python
+import pandas as pd
+df = pd.read_json('data/logs/brti_2026-04-07.jsonl', lines=True)
+```
+
+Types: `brti`, `trades`, `signals`, `opportunities`, `fills`, `risk_violations`.
+
+---
+
+## Signal Design Learnings
+
+- The 20-sample rolling delta detector is too slow for 15-minute markets. Real edge is in 5-30 second spike detection, not multi-minute trend following.
+- Observed: BTC moved $44 down then $31 up within 90 seconds on a 15-min market. Kalshi repriced from 52¢ → 41¢ → 64¢ in the same window.
+- Target detection window: BRTI moves >$20 in <30 seconds = actionable signal. Current system would miss this entirely.
+- Phase 5 ML model should focus on short-window microstructure features, not trend features.
+- Add a second detector alongside `BrtiDeltaDetector`: `SpikeDetector` — rolling 30-second window, fires when absolute price change exceeds configurable threshold (default $15).
